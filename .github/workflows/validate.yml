@@ -1,0 +1,104 @@
+name: validate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ajv:
+    name: ajv-cli (draft2020)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "22"
+      - name: Install ajv-cli + ajv-formats
+        run: npm install --no-save ajv-cli ajv-formats
+      - name: Every valid/* fixture must PASS
+        run: |
+          set -eu
+          schema="schemas/workflow-definition/v1/workflow-definition.schema.json"
+          status=0
+          for f in fixtures/workflow-definition/v1/valid/*.json; do
+            echo "== $f (expect PASS) =="
+            if ! npx ajv validate --spec=draft2020 -c ajv-formats -s "$schema" -d "$f"; then
+              echo "FAIL: $f should have validated but did not" >&2
+              status=1
+            fi
+          done
+          exit "$status"
+      - name: Every invalid/* fixture must FAIL
+        run: |
+          set -eu
+          schema="schemas/workflow-definition/v1/workflow-definition.schema.json"
+          status=0
+          for f in fixtures/workflow-definition/v1/invalid/*.json; do
+            echo "== $f (expect FAIL) =="
+            if npx ajv validate --spec=draft2020 -c ajv-formats -s "$schema" -d "$f"; then
+              echo "FAIL: $f should NOT have validated but did" >&2
+              status=1
+            fi
+          done
+          exit "$status"
+
+  check-jsonschema:
+    name: check-jsonschema (python)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Install check-jsonschema
+        run: pip install check-jsonschema
+      - name: Every valid/* fixture must PASS
+        run: |
+          set -eu
+          schema="schemas/workflow-definition/v1/workflow-definition.schema.json"
+          status=0
+          for f in fixtures/workflow-definition/v1/valid/*.json; do
+            echo "== $f (expect PASS) =="
+            if ! check-jsonschema --schemafile "$schema" "$f"; then
+              echo "FAIL: $f should have validated but did not" >&2
+              status=1
+            fi
+          done
+          exit "$status"
+      - name: Every invalid/* fixture must FAIL
+        run: |
+          set -eu
+          schema="schemas/workflow-definition/v1/workflow-definition.schema.json"
+          status=0
+          for f in fixtures/workflow-definition/v1/invalid/*.json; do
+            echo "== $f (expect FAIL) =="
+            if check-jsonschema --schemafile "$schema" "$f"; then
+              echo "FAIL: $f should NOT have validated but did" >&2
+              status=1
+            fi
+          done
+          exit "$status"
+
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
