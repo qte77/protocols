@@ -26,3 +26,7 @@ described in `README.md`; this file tracks changes to the repo as a whole.
   consumer repo.
 - `.github/workflows/validate.yml`: CI gate validating every fixture with
   both `ajv` (node) and `check-jsonschema` (python), plus a gitleaks scan.
+
+### Changed
+
+- The validate workflow sets up Node 24 instead of 22 for the ajv-cli job (estate move to Node 24 only).
